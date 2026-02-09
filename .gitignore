@@ -4,6 +4,10 @@ config.yml
 secrets.yml
 .vault_pass
 
+# User recipes (your site configs - only examples committed)
+recipes/*.yml
+!recipes/*.example.yml
+
 # OS
 .DS_Store
 

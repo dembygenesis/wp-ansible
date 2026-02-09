@@ -1,0 +1,27 @@
+# Example: Client Website
+# Copy to recipes/acme-corp.yml and customize
+
+domain: acme-corp.com
+ssl_email: webmaster@acme-corp.com
+
+wp_admin_user: acme_admin
+wp_admin_password: CHANGE_ME
+wp_admin_email: admin@acme-corp.com
+wp_site_title: Acme Corporation
+
+wp_theme: flavor flavored flavored
+
+wp_db_name: wordpress_acme
+wp_db_user: wp_acme
+wp_db_password: CHANGE_ME_DB
+mysql_root_password: CHANGE_ME_ROOT
+
+# Use different ports per site to run multiple on same server
+wp_port: 3020
+mysql_port: 3021
+
+container_prefix: wp_acme
+
+deploy_path: /opt/wordpress/acme
+nginx_sites_available: /etc/nginx/sites-available
+nginx_sites_enabled: /etc/nginx/sites-enabled
