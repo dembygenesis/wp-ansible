@@ -1,0 +1,54 @@
+---
+# WordPress Setup Playbook
+# Usage: ansible-playbook playbooks/setup.yml
+#
+# Tags:
+#   --tags common    - Only install base packages
+#   --tags docker    - Only install Docker
+#   --tags nginx     - Only configure Nginx + SSL
+#   --tags wordpress - Only deploy WordPress
+
+- name: Deploy WordPress
+  hosts: wordpress_server
+  become: yes
+  vars_files:
+    - ../config.yml
+
+  pre_tasks:
+    - name: Validate required variables
+      assert:
+        that:
+          - domain is defined and domain | length > 0
+          - ssl_email is defined and ssl_email | length > 0
+          - wp_admin_user is defined
+          - wp_admin_password is defined
+          - wp_admin_password != 'CHANGE_ME_STRONG_PASSWORD'
+          - wp_db_password != 'CHANGE_ME_DB_PASSWORD'
+          - mysql_root_password != 'CHANGE_ME_ROOT_PASSWORD'
+        fail_msg: "Missing or unchanged required variables. Edit config.yml first."
+
+  roles:
+    - role: common
+      tags: [common]
+
+    - role: docker
+      tags: [docker]
+
+    - role: nginx
+      tags: [nginx]
+
+    - role: wordpress
+      tags: [wordpress]
+
+  post_tasks:
+    - name: Deployment summary
+      debug:
+        msg: |
+          ========================================
+          WordPress deployed successfully!
+          ========================================
+          URL:        https://{{ domain }}
+          Admin:      https://{{ domain }}/wp-admin
+          User:       {{ wp_admin_user }}
+          Theme:      {{ wp_theme }}
+          ========================================

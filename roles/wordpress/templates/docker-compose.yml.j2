@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  wordpress:
+    image: wordpress:cli-php8.2
+    container_name: {{ container_prefix }}_wordpress
+    restart: unless-stopped
+    ports:
+      - "{{ wp_port }}:80"
+    environment:
+      WORDPRESS_DB_HOST: {{ container_prefix }}_mysql:3306
+      WORDPRESS_DB_NAME: {{ wp_db_name }}
+      WORDPRESS_DB_USER: {{ wp_db_user }}
+      WORDPRESS_DB_PASSWORD: {{ wp_db_password }}
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - wp_network
+
+  mysql:
+    image: mysql:8.0
+    container_name: {{ container_prefix }}_mysql
+    restart: unless-stopped
+    ports:
+      - "{{ mysql_port }}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: {{ mysql_root_password }}
+      MYSQL_DATABASE: {{ wp_db_name }}
+      MYSQL_USER: {{ wp_db_user }}
+      MYSQL_PASSWORD: {{ wp_db_password }}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p{{ mysql_root_password }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wp_network
+
+volumes:
+  wordpress_data:
+    name: {{ container_prefix }}_wordpress_data
+  mysql_data:
+    name: {{ container_prefix }}_mysql_data
+
+networks:
+  wp_network:
+    name: {{ container_prefix }}_network

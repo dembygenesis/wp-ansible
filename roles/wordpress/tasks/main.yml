@@ -1,0 +1,61 @@
+---
+- name: Create deployment directory
+  file:
+    path: "{{ deploy_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Create docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ deploy_path }}/docker-compose.yml"
+
+- name: Create .env file
+  template:
+    src: env.j2
+    dest: "{{ deploy_path }}/.env"
+    mode: '0600'
+
+- name: Start WordPress containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ deploy_path }}"
+    state: present
+  register: docker_compose_result
+
+- name: Wait for WordPress to be ready
+  uri:
+    url: "http://127.0.0.1:{{ wp_port }}"
+    status_code: [200, 302]
+  register: wp_health
+  until: wp_health.status in [200, 302]
+  retries: 30
+  delay: 5
+
+- name: Check if WordPress is already installed
+  command: >
+    docker exec {{ container_prefix }}_wordpress
+    wp core is-installed --allow-root
+  register: wp_installed
+  ignore_errors: yes
+  changed_when: false
+
+- name: Install WordPress via WP-CLI
+  command: >
+    docker exec {{ container_prefix }}_wordpress
+    wp core install
+    --url="https://{{ domain }}"
+    --title="{{ wp_site_title }}"
+    --admin_user="{{ wp_admin_user }}"
+    --admin_password="{{ wp_admin_password }}"
+    --admin_email="{{ wp_admin_email }}"
+    --skip-email
+    --allow-root
+  when: wp_installed.rc != 0
+
+- name: Install and activate theme
+  command: >
+    docker exec {{ container_prefix }}_wordpress
+    wp theme install {{ wp_theme }} --activate --allow-root
+  register: theme_result
+  changed_when: "'Installing' in theme_result.stdout"
+  failed_when: false
