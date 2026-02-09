@@ -45,7 +45,6 @@
       file:
         path: "{{ nginx_sites_enabled }}/{{ domain | replace('.', '-') }}.conf"
         state: absent
-      notify: Reload Nginx
 
     - name: Remove Nginx available config
       file:

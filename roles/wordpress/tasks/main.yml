@@ -33,15 +33,15 @@
 
 - name: Check if WordPress is already installed
   command: >
-    docker exec {{ container_prefix }}_wordpress
-    wp core is-installed --allow-root
+    docker exec {{ container_prefix }}_wpcli
+    wp core is-installed
   register: wp_installed
   ignore_errors: yes
   changed_when: false
 
 - name: Install WordPress via WP-CLI
   command: >
-    docker exec {{ container_prefix }}_wordpress
+    docker exec {{ container_prefix }}_wpcli
     wp core install
     --url="https://{{ domain }}"
     --title="{{ wp_site_title }}"
@@ -49,13 +49,12 @@
     --admin_password="{{ wp_admin_password }}"
     --admin_email="{{ wp_admin_email }}"
     --skip-email
-    --allow-root
   when: wp_installed.rc != 0
 
 - name: Install and activate theme
   command: >
-    docker exec {{ container_prefix }}_wordpress
-    wp theme install {{ wp_theme }} --activate --allow-root
+    docker exec {{ container_prefix }}_wpcli
+    wp theme install {{ wp_theme }} --activate
   register: theme_result
   changed_when: "'Installing' in theme_result.stdout"
   failed_when: false

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   wordpress:
-    image: wordpress:cli-php8.2
+    image: wordpress:latest
     container_name: {{ container_prefix }}_wordpress
     restart: unless-stopped
     ports:
@@ -19,6 +19,23 @@ services:
         condition: service_healthy
     networks:
       - wp_network
+
+  wpcli:
+    image: wordpress:cli
+    container_name: {{ container_prefix }}_wpcli
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: {{ container_prefix }}_mysql:3306
+      WORDPRESS_DB_NAME: {{ wp_db_name }}
+      WORDPRESS_DB_USER: {{ wp_db_user }}
+      WORDPRESS_DB_PASSWORD: {{ wp_db_password }}
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - wordpress
+    networks:
+      - wp_network
+    entrypoint: ["tail", "-f", "/dev/null"]
 
   mysql:
     image: mysql:8.0

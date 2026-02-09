@@ -35,6 +35,6 @@
         enabled: yes
 
 - name: Install Docker Python SDK
-  pip:
-    name: docker
+  apt:
+    name: python3-docker
     state: present
