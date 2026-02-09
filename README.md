@@ -1,19 +1,13 @@
-# wp-terraform
+# wp-ansible
 
-Deploy WordPress sites with one command. Tear them down with another.
-
-## What This Does
+Deploy WordPress to any VPS with one command. Tear it down with another.
 
 ```
-You define sites in a config file → Terraform creates everything → WordPress runs on HTTPS
+ansible-playbook playbooks/setup.yml     # Deploy
+ansible-playbook playbooks/teardown.yml  # Destroy
 ```
 
-**Creates:**
-- Docker containers (WordPress + MySQL)
-- Nginx reverse proxy config
-- Let's Encrypt SSL cert (auto-renewed)
-
-**Per site. As many sites as you want.**
+**Creates:** Docker containers (WordPress + MySQL) + Nginx reverse proxy + Let's Encrypt SSL + WordPress admin user + Theme installed.
 
 ---
 
@@ -21,112 +15,211 @@ You define sites in a config file → Terraform creates everything → WordPress
 
 ```bash
 # 1. Clone
-git clone git@github.com:dembygenesis/wp-terraform.git
-cd wp-terraform/terraform
+git clone git@github.com:dembygenesis/wp-ansible.git
+cd wp-ansible
 
-# 2. Config
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your sites
+# 2. Install Ansible
+pip install ansible
+ansible-galaxy collection install community.docker
 
-# 3. Deploy
-terraform init    # First time only
-terraform apply   # Creates everything
+# 3. Configure
+cp config.yml.example config.yml
+vim config.yml  # Edit with your values
+
+# 4. Set server connection (see "Server Connection" section)
+
+# 5. Deploy
+ansible-playbook playbooks/setup.yml
 ```
 
-That's it. Your site is live at `https://your-domain.com`
+Your site is live at `https://your-domain.com`
 
 ---
 
-## The Config File
+## Server Connection
 
-`terraform/terraform.tfvars` - this is where you define your sites:
+### Option A: Environment Variables (recommended for automation)
 
-```hcl
-ssh_host  = "eufit"              # Your SSH alias or IP
-ssl_email = "you@email.com"      # For Let's Encrypt
+```bash
+export WP_SERVER_HOST="your-server-ip-or-hostname"
+export WP_SERVER_USER="root"
+export WP_SSH_KEY="~/.ssh/id_rsa"
 
-sites = {
-  # Each block = one WordPress site
-  "my-blog" = {
-    domain              = "blog.example.com"
-    wp_port             = 3006        # Pick unique ports
-    mysql_port          = 3007        # per site
-    wp_db_name          = "wordpress"
-    wp_db_user          = "wp_user"
-    wp_db_password      = "secure-password-here"
-    mysql_root_password = "another-secure-password"
-    enabled             = true        # false = skip this site
-  }
+ansible-playbook playbooks/setup.yml
+```
 
-  # Add more sites...
-  "client-site" = {
-    domain              = "client.example.com"
-    wp_port             = 3008
-    mysql_port          = 3009
-    # ...
-  }
-}
+### Option B: SSH Config (recommended for personal use)
+
+Add to `~/.ssh/config`:
+
+```
+Host myserver
+    HostName 123.45.67.89
+    User root
+    IdentityFile ~/.ssh/id_rsa
+```
+
+Then edit `inventory.yml`:
+
+```yaml
+all:
+  hosts:
+    wordpress_server:
+      ansible_host: myserver
+```
+
+### Option C: Direct inventory edit
+
+Edit `inventory.yml` directly with your server details.
+
+---
+
+## Configuration
+
+All settings live in `config.yml`. Copy from example and customize:
+
+```yaml
+# Domain & SSL
+domain: myblog.com
+ssl_email: admin@myblog.com
+
+# WordPress Admin (created on first deploy)
+wp_admin_user: admin
+wp_admin_password: your-secure-password
+wp_admin_email: admin@myblog.com
+wp_site_title: My Blog
+
+# Theme (wordpress.org slug)
+wp_theme: flavor-flavor
+
+# Database
+wp_db_name: wordpress
+wp_db_user: wp_user
+wp_db_password: db-password-here
+mysql_root_password: root-password-here
+
+# Ports
+wp_port: 3006
+mysql_port: 3307
 ```
 
 ---
 
-## Commands You'll Use
+## Commands
 
 | Command | What it does |
 |---------|--------------|
-| `terraform init` | Downloads dependencies (run once) |
-| `terraform plan` | Preview what will happen |
-| `terraform apply` | Create/update everything |
-| `terraform destroy` | Tear down everything |
+| `ansible-playbook playbooks/setup.yml` | Full deploy |
+| `ansible-playbook playbooks/teardown.yml` | Full teardown |
+| `ansible-playbook playbooks/setup.yml --check` | Dry run (no changes) |
+| `ansible-playbook playbooks/setup.yml --tags nginx` | Only nginx/SSL |
+| `ansible-playbook playbooks/setup.yml --tags wordpress` | Only WordPress |
 
-### Day-to-day workflow
+### Tags available
+- `common` - Base packages
+- `docker` - Docker installation
+- `nginx` - Nginx + SSL
+- `wordpress` - WordPress + theme
+
+---
+
+## Operationalizing Secrets
+
+**DO NOT commit `config.yml` with real passwords.** Here's how to handle secrets properly:
+
+### For Personal/Dev Use
+
+1. Keep `config.yml` git-ignored (already in `.gitignore`)
+2. Store passwords in a password manager
+3. Copy from `config.yml.example` on each machine
+
+### For Team/CI Use: Environment Variables
+
+```yaml
+# config.yml - use env vars for secrets
+wp_admin_password: "{{ lookup('env', 'WP_ADMIN_PASSWORD') }}"
+wp_db_password: "{{ lookup('env', 'WP_DB_PASSWORD') }}"
+mysql_root_password: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+```
 
 ```bash
-# Add a new site
-vim terraform.tfvars  # Add new site block
-terraform apply       # Creates just the new site
+# In CI or .bashrc (not committed)
+export WP_ADMIN_PASSWORD="super-secret"
+export WP_DB_PASSWORD="also-secret"
+export MYSQL_ROOT_PASSWORD="very-secret"
 
-# Remove a site
-vim terraform.tfvars  # Set enabled = false (or delete block)
-terraform apply       # Removes just that site
+ansible-playbook playbooks/setup.yml
+```
 
-# Update a site (change port, etc)
-vim terraform.tfvars  # Change values
-terraform apply       # Recreates affected resources
+### For Production: Ansible Vault
 
-# Nuke everything
-terraform destroy     # Gone. All of it.
+```bash
+# 1. Create encrypted secrets file
+ansible-vault create secrets.yml
+
+# 2. Add your secrets
+wp_admin_password: super-secret
+wp_db_password: also-secret
+mysql_root_password: very-secret
+
+# 3. Reference in config.yml
+wp_admin_password: "{{ wp_admin_password }}"
+
+# 4. Run with vault password
+ansible-playbook playbooks/setup.yml --ask-vault-pass
+
+# Or with password file (for CI)
+ansible-playbook playbooks/setup.yml --vault-password-file ~/.vault_pass
+```
+
+### Secret Rotation
+
+```bash
+# 1. Update secrets in config.yml or vault
+# 2. Re-run playbook - it will update WordPress
+ansible-playbook playbooks/setup.yml --tags wordpress
 ```
 
 ---
 
-## Terraform for Backend Devs
+## Server Prerequisites
 
-**Think of it like this:**
+The playbook installs most things, but your server needs:
 
-| Terraform | Backend Equivalent |
-|-----------|-------------------|
-| `.tf` files | Schema/migrations |
-| `terraform.tfvars` | `.env` file |
-| `terraform apply` | `db:migrate` |
-| `terraform destroy` | `db:rollback` |
-| State file | Migration history |
+- Ubuntu 20.04+ (or Debian-based)
+- SSH access (key-based recommended)
+- Root or sudo access
+- Ports 80, 443 open
+- DNS pointing to server IP
 
-**Key concepts:**
+### First-time server setup
 
-1. **Declarative** - You describe what you want, not how to do it
-2. **Idempotent** - Run `apply` 100 times, same result
-3. **State** - Terraform tracks what it created (in `terraform.tfstate`)
-
-**The flow:**
+```bash
+# On server
+apt update && apt upgrade -y
+# That's it - Ansible handles the rest
 ```
-Your config (tfvars)
-    ↓ terraform plan
-Shows diff (what will change)
-    ↓ terraform apply
-Makes it real
-    ↓
-State file updated
+
+---
+
+## Troubleshooting
+
+**"SSL cert failed"**
+> DNS not pointing to server yet. Wait for propagation, retry.
+
+**"502 Bad Gateway"**
+> Containers still starting. Wait 30s. Check: `docker logs wp_wordpress`
+
+**"Connection refused"**
+> Check SSH config. Test with: `ssh wordpress_server`
+
+**"Permission denied"**
+> Ensure SSH key is correct. Check `ansible_user` is root or has sudo.
+
+**Want to start fresh?**
+```bash
+ansible-playbook playbooks/teardown.yml
+ansible-playbook playbooks/setup.yml
 ```
 
 ---
@@ -134,70 +227,29 @@ State file updated
 ## File Structure
 
 ```
-wp-terraform/
-├── terraform/
-│   ├── main.tf              # "Deploy all sites in the config"
-│   ├── variables.tf         # Input definitions
-│   ├── terraform.tfvars     # YOUR CONFIG (git-ignored)
-│   └── modules/wp-site/     # The actual logic
-│       ├── main.tf          # Docker + Nginx + SSL setup
-│       └── variables.tf     # Per-site inputs
-│
-├── setup.sh                 # Non-terraform alternative
-└── teardown.sh              # Non-terraform alternative
+wp-ansible/
+├── ansible.cfg           # Ansible settings
+├── inventory.yml         # Server connection
+├── config.yml.example    # Template config
+├── config.yml            # YOUR CONFIG (git-ignored)
+├── playbooks/
+│   ├── setup.yml         # Deploy everything
+│   └── teardown.yml      # Remove everything
+└── roles/
+    ├── common/           # Base packages
+    ├── docker/           # Docker installation
+    ├── nginx/            # Nginx + SSL
+    └── wordpress/        # WordPress + WP-CLI
 ```
 
 ---
 
-## Prerequisites
+## Why Ansible?
 
-**On your machine:**
-```bash
-brew install terraform   # or: apt install terraform
-```
+| Tool | Best for |
+|------|----------|
+| Terraform | Creating/destroying cloud VMs |
+| **Ansible** | **Configuring existing servers** |
+| Docker | Running applications |
 
-**On the server:**
-- Docker + Docker Compose
-- Nginx
-- Certbot (`apt install certbot python3-certbot-nginx`)
-- SSH access configured (`~/.ssh/config`)
-
-**DNS:**
-- Point your domain to the server IP before deploying
-
----
-
-## Troubleshooting
-
-**"SSL cert failed"**
-→ DNS not pointing to server yet. Wait for propagation, retry.
-
-**"502 Bad Gateway"**
-→ Containers still starting. Wait 30s. Check: `docker logs <prefix>_wordpress`
-
-**"Port already in use"**
-→ Pick different ports in config.
-
-**"State is locked"**
-→ Someone else running terraform, or crashed. Run: `terraform force-unlock <lock-id>`
-
-**Want to start fresh?**
-```bash
-rm terraform.tfstate*   # Forget everything
-terraform apply         # Recreate from scratch
-```
-
----
-
-## Non-Terraform Option
-
-Don't want Terraform? Use the bash scripts:
-
-```bash
-cp config.env.example config.env
-vim config.env
-./setup.sh      # Deploy
-./teardown.sh   # Destroy
-```
-
-Single site only. No state tracking. But works.
+Ansible is THE tool for VPS configuration. Terraform is overkill if your server already exists.

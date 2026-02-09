@@ -1,0 +1,4 @@
+all:
+  hosts:
+    wordpress_server:
+      ansible_host: eufit

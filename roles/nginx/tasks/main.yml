@@ -1,0 +1,50 @@
+---
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Install Certbot
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+
+- name: Create Nginx site config
+  template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_sites_available }}/{{ domain | replace('.', '-') }}.conf"
+  notify: Reload Nginx
+
+- name: Enable Nginx site
+  file:
+    src: "{{ nginx_sites_available }}/{{ domain | replace('.', '-') }}.conf"
+    dest: "{{ nginx_sites_enabled }}/{{ domain | replace('.', '-') }}.conf"
+    state: link
+  notify: Reload Nginx
+
+- name: Test Nginx configuration
+  command: nginx -t
+  changed_when: false
+
+- name: Check if SSL cert exists
+  stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: ssl_cert
+
+- name: Obtain SSL certificate
+  command: >
+    certbot --nginx
+    -d {{ domain }}
+    --non-interactive
+    --agree-tos
+    --email {{ ssl_email }}
+  when: not ssl_cert.stat.exists
+  notify: Reload Nginx
+
+- name: Ensure Nginx is running
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes

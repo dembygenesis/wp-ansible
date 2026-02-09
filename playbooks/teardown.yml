@@ -1,0 +1,75 @@
+---
+# WordPress Teardown Playbook
+# Usage: ansible-playbook playbooks/teardown.yml
+#
+# This will:
+#   - Stop and remove Docker containers
+#   - Remove Docker volumes (DATA WILL BE LOST)
+#   - Remove Nginx config
+#   - Optionally remove SSL cert
+
+- name: Teardown WordPress
+  hosts: wordpress_server
+  become: yes
+  vars_files:
+    - ../config.yml
+
+  vars:
+    remove_ssl: false  # Set to true to also remove SSL cert
+
+  tasks:
+    - name: Stop and remove Docker containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ deploy_path }}"
+        state: absent
+        remove_volumes: yes
+      ignore_errors: yes
+
+    - name: Remove Docker volumes
+      command: >
+        docker volume rm
+        {{ container_prefix }}_wordpress_data
+        {{ container_prefix }}_mysql_data
+      ignore_errors: yes
+
+    - name: Remove Docker network
+      command: docker network rm {{ container_prefix }}_network
+      ignore_errors: yes
+
+    - name: Remove deployment directory
+      file:
+        path: "{{ deploy_path }}"
+        state: absent
+
+    - name: Remove Nginx site config
+      file:
+        path: "{{ nginx_sites_enabled }}/{{ domain | replace('.', '-') }}.conf"
+        state: absent
+
+    - name: Remove Nginx available config
+      file:
+        path: "{{ nginx_sites_available }}/{{ domain | replace('.', '-') }}.conf"
+        state: absent
+
+    - name: Remove SSL certificate (if requested)
+      command: certbot delete --cert-name {{ domain }} --non-interactive
+      when: remove_ssl | bool
+      ignore_errors: yes
+
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      ignore_errors: yes
+
+    - name: Teardown summary
+      debug:
+        msg: |
+          ========================================
+          WordPress removed!
+          ========================================
+          Domain:     {{ domain }}
+          SSL cert:   {{ 'Removed' if remove_ssl else 'Kept' }}
+          ========================================
+
+          Note: DNS records are NOT modified.
