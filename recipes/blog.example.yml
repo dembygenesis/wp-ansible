@@ -1,0 +1,26 @@
+# Example: Personal Blog
+# Copy to recipes/blog.yml and customize
+
+domain: blog.example.com
+ssl_email: you@example.com
+
+wp_admin_user: admin
+wp_admin_password: CHANGE_ME
+wp_admin_email: you@example.com
+wp_site_title: My Personal Blog
+
+wp_theme: flavor flavored flavored
+
+wp_db_name: wordpress_blog
+wp_db_user: wp_blog
+wp_db_password: CHANGE_ME_DB
+mysql_root_password: CHANGE_ME_ROOT
+
+wp_port: 3010
+mysql_port: 3011
+
+container_prefix: wp_blog
+
+deploy_path: /opt/wordpress/blog
+nginx_sites_available: /etc/nginx/sites-available
+nginx_sites_enabled: /etc/nginx/sites-enabled
